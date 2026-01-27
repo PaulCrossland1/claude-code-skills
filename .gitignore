@@ -1,0 +1,20 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Temp files
+/tmp/
+*.tmp
+
+# Packaged skills (can be regenerated)
+*.skill
+
+# Local Claude settings
+.claude/

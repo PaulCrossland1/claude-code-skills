@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Loop Monitor</title>
+  <style>
+    :root {
+      --bg-primary: #0a0e14;
+      --bg-secondary: #0d1117;
+      --bg-tertiary: #161b22;
+      --bg-card: #1c2128;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent-blue: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-yellow: #d29922;
+      --accent-red: #f85149;
+      --accent-purple: #a371f7;
+      --accent-cyan: #39c5cf;
+
+      --col-pending: #484f58;
+      --col-progress: #1f6feb;
+      --col-completed: #238636;
+      --col-blocked: #da3633;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      letter-spacing: 1px;
+    }
+
+    .project-name {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge.running {
+      background: var(--col-progress);
+      color: white;
+      animation: badgePulse 1.5s ease-in-out infinite;
+    }
+    .status-badge.completed { background: var(--col-completed); color: white; }
+    .status-badge.paused, .status-badge.starting { background: var(--accent-yellow); color: #000; }
+    .status-badge.failed, .status-badge.blocked { background: var(--col-blocked); color: white; }
+    .status-badge.waiting { background: var(--col-pending); color: white; }
+
+    @keyframes badgePulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(31, 111, 235, 0.7); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(31, 111, 235, 0); }
+    }
+
+    .header-stats {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'SF Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .progress-ring {
+      width: 44px;
+      height: 44px;
+      position: relative;
+    }
+
+    .progress-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .progress-ring circle {
+      fill: none;
+      stroke-width: 4;
+    }
+
+    .progress-ring .bg { stroke: var(--bg-tertiary); }
+    .progress-ring .fg {
+      stroke: var(--accent-green);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .progress-ring .text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .eta-box {
+      background: var(--bg-tertiary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    .eta-label { color: var(--text-muted); }
+    .eta-value { color: var(--accent-yellow); font-weight: 600; margin-left: 4px; }
+
+    .elapsed {
+      font-family: 'SF Mono', monospace;
+      font-size: 20px;
+      color: var(--text-secondary);
+    }
+
+    /* Main content area */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Kanban section */
+    .kanban-section {
+      flex: 1;
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .kanban-column {
+      flex: 1;
+      min-width: 220px;
+      max-width: 300px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .column-header {
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .column-header.pending { border-bottom-color: var(--col-pending); }
+    .column-header.in_progress { border-bottom-color: var(--col-progress); }
+    .column-header.completed { border-bottom-color: var(--col-completed); }
+    .column-header.blocked { border-bottom-color: var(--col-blocked); }
+
+    .column-title {
+      font-weight: 600;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--col-pending);
+    }
+
+    .pulse-dot.pending { background: var(--col-pending); }
+    .pulse-dot.in_progress {
+      background: var(--col-progress);
+      animation: dotPulse 1.5s ease-in-out infinite;
+    }
+    .pulse-dot.completed { background: var(--col-completed); }
+    .pulse-dot.blocked { background: var(--col-blocked); }
+
+    @keyframes dotPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+    }
+
+    .column-count {
+      background: var(--bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .column-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Task Cards */
+    .task-card {
+      background: var(--bg-card);
+      border-radius: 6px;
+      padding: 10px;
+      border-left: 3px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .task-card:hover {
+      background: var(--bg-tertiary);
+      transform: translateX(2px);
+    }
+
+    .task-card.selected {
+      box-shadow: 0 0 0 2px var(--accent-blue);
+    }
+
+    .task-card.pending { border-left-color: var(--col-pending); }
+    .task-card.in_progress {
+      border-left-color: var(--col-progress);
+      background: rgba(31, 111, 235, 0.15);
+      animation: cardGlow 2s ease-in-out infinite;
+    }
+    .task-card.completed { border-left-color: var(--col-completed); }
+    .task-card.blocked { border-left-color: var(--col-blocked); }
+
+    @keyframes cardGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(31, 111, 235, 0.4); }
+      50% { box-shadow: 0 0 12px 2px rgba(31, 111, 235, 0.2); }
+    }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+
+    .task-id {
+      font-family: 'SF Mono', monospace;
+      font-size: 10px;
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .task-attempt {
+      font-size: 9px;
+      padding: 1px 5px;
+      background: var(--accent-yellow);
+      color: #000;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .task-phase {
+      font-size: 9px;
+      padding: 2px 5px;
+      background: var(--bg-primary);
+      border-radius: 3px;
+      color: var(--text-muted);
+    }
+
+    .task-name {
+      font-size: 11px;
+      line-height: 1.3;
+      color: var(--text-primary);
+    }
+
+    .task-meta {
+      margin-top: 4px;
+      font-size: 9px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+    }
+
+    .task-duration { color: var(--accent-green); }
+
+    .empty-column {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 20px 10px;
+    }
+
+    /* Task Detail Sidebar */
+    .detail-sidebar {
+      width: 320px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .detail-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .detail-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .detail-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .detail-section {
+      margin-bottom: 12px;
+    }
+
+    .detail-section-title {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .detail-task-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .detail-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .detail-badge {
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+    }
+
+    .detail-badge.phase { color: var(--accent-purple); }
+    .detail-badge.duration { color: var(--accent-green); }
+    .detail-badge.attempt { background: var(--accent-yellow); color: #000; }
+
+    .detail-description {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+      padding: 8px;
+      border-radius: 4px;
+    }
+
+    .criteria-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .criteria-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 10px;
+      padding: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+    }
+
+    .criteria-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    .criteria-icon.pass { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+    .criteria-icon.pending { background: rgba(110, 118, 129, 0.2); color: var(--text-muted); }
+
+    .task-log-preview {
+      font-family: 'SF Mono', monospace;
+      font-size: 9px;
+      background: var(--bg-primary);
+      padding: 8px;
+      border-radius: 4px;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+
+    /* CLI Output Section */
+    .cli-section {
+      height: 180px;
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .cli-header {
+      padding: 6px 12px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .cli-title {
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cli-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      animation: cliPulse 1s ease-in-out infinite;
+    }
+
+    .cli-indicator.inactive {
+      background: var(--text-muted);
+      animation: none;
+    }
+
+    @keyframes cliPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .cli-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 10px;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: var(--border); }
+    .btn.active { background: var(--accent-blue); border-color: var(--accent-blue); }
+
+    .cli-output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .cli-line { white-space: pre-wrap; word-break: break-all; }
+    .cli-line.success { color: var(--accent-green); }
+    .cli-line.error { color: var(--accent-red); }
+    .cli-line.info { color: var(--accent-blue); }
+    .cli-line.header { color: var(--accent-purple); font-weight: 600; }
+    .cli-line.warning { color: var(--accent-yellow); }
+
+    /* Footer */
+    footer {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 6px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .footer-info {
+      display: flex;
+      gap: 16px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .footer-info strong { color: var(--text-secondary); }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .connection-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+    }
+
+    .connection-dot.disconnected { background: var(--accent-red); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <span class="logo">TASK LOOP</span>
+      <span class="project-name" id="projectName">Loading...</span>
+      <span class="status-badge waiting" id="statusBadge">Waiting</span>
+    </div>
+    <div class="header-stats">
+      <div class="stat">
+        <div class="stat-value" id="iterationCount">-</div>
+        <div class="stat-label">Iteration</div>
+      </div>
+      <div class="progress-ring">
+        <svg width="44" height="44">
+          <circle class="bg" cx="22" cy="22" r="18"></circle>
+          <circle class="fg" id="progressCircle" cx="22" cy="22" r="18"
+                  stroke-dasharray="113.1" stroke-dashoffset="113.1"></circle>
+        </svg>
+        <span class="text" id="progressPercent">0%</span>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="completedCount">0</div>
+        <div class="stat-label">Done</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="totalCount">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="eta-box">
+        <span class="eta-label">ETA</span>
+        <span class="eta-value" id="etaValue">--</span>
+      </div>
+      <div class="elapsed" id="elapsedTime">00:00</div>
+    </div>
+  </header>
+
+  <div class="main-content">
+    <div class="kanban-section">
+      <div class="kanban-column">
+        <div class="column-header pending">
+          <span class="column-title">
+            <span class="pulse-dot pending"></span>
+            Pending
+          </span>
+          <span class="column-count" id="pendingCount">0</span>
+        </div>
+        <div class="column-cards" id="pendingCards"></div>
+      </div>
+
+      <div class="kanban-column">
+        <div class="column-header in_progress">
+          <span class="column-title">
+            <span class="pulse-dot in_progress" id="progressDot"></span>
+            In Progress
+          </span>
+          <span class="column-count" id="progressColumnCount">0</span>
+        </div>
+        <div class="column-cards" id="progressCards"></div>
+      </div>
+
+      <div class="kanban-column">
+        <div class="column-header completed">
+          <span class="column-title">
+            <span class="pulse-dot completed"></span>
+            Completed
+          </span>
+          <span class="column-count" id="completedColumnCount">0</span>
+        </div>
+        <div class="column-cards" id="completedCards"></div>
+      </div>
+
+      <div class="kanban-column">
+        <div class="column-header blocked">
+          <span class="column-title">
+            <span class="pulse-dot blocked"></span>
+            Blocked
+          </span>
+          <span class="column-count" id="blockedCount">0</span>
+        </div>
+        <div class="column-cards" id="blockedCards"></div>
+      </div>
+
+      <div class="detail-sidebar">
+        <div class="detail-header">
+          Task Detail
+          <button class="btn" id="openLogBtn" style="display:none;">View Log</button>
+        </div>
+        <div class="detail-content" id="detailContent">
+          <div class="detail-empty">
+            <p>Click a task to view details</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cli-section">
+      <div class="cli-header">
+        <span class="cli-title">
+          <span class="cli-indicator" id="cliIndicator"></span>
+          Output
+        </span>
+        <div class="cli-controls">
+          <button class="btn active" id="pollToggle">Live</button>
+          <button class="btn" id="clearBtn">Clear</button>
+          <button class="btn" id="openLogsBtn">Logs</button>
+        </div>
+      </div>
+      <div class="cli-output" id="cliOutput">
+        <div class="cli-line info">Waiting for task loop...</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-info">
+      <span>Agent: <strong id="agentName">-</strong></span>
+      <span>Current: <strong id="currentTaskBrief">None</strong></span>
+      <span>Avg: <strong id="avgDuration">-</strong></span>
+    </div>
+    <div class="connection">
+      <span class="connection-dot" id="connectionDot"></span>
+      <span id="lastUpdate">--</span>
+    </div>
+  </footer>
+
+  <script>
+    let state = null;
+    let tasks = [];
+    let polling = true;
+    let pollInterval = null;
+    let logPollInterval = null;
+    let startTime = null;
+    let selectedTaskId = null;
+
+    const $ = id => document.getElementById(id);
+
+    const elements = {
+      projectName: $('projectName'),
+      statusBadge: $('statusBadge'),
+      iterationCount: $('iterationCount'),
+      progressCircle: $('progressCircle'),
+      progressPercent: $('progressPercent'),
+      completedCount: $('completedCount'),
+      totalCount: $('totalCount'),
+      etaValue: $('etaValue'),
+      elapsedTime: $('elapsedTime'),
+      pendingCards: $('pendingCards'),
+      progressCards: $('progressCards'),
+      completedCards: $('completedCards'),
+      blockedCards: $('blockedCards'),
+      pendingCount: $('pendingCount'),
+      progressColumnCount: $('progressColumnCount'),
+      completedColumnCount: $('completedColumnCount'),
+      blockedCount: $('blockedCount'),
+      progressDot: $('progressDot'),
+      detailContent: $('detailContent'),
+      openLogBtn: $('openLogBtn'),
+      cliIndicator: $('cliIndicator'),
+      cliOutput: $('cliOutput'),
+      pollToggle: $('pollToggle'),
+      clearBtn: $('clearBtn'),
+      openLogsBtn: $('openLogsBtn'),
+      agentName: $('agentName'),
+      currentTaskBrief: $('currentTaskBrief'),
+      avgDuration: $('avgDuration'),
+      connectionDot: $('connectionDot'),
+      lastUpdate: $('lastUpdate')
+    };
+
+    function formatTime(s) {
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+      return `${m}:${sec.toString().padStart(2,'0')}`;
+    }
+
+    function formatDuration(s) {
+      if (!s) return '-';
+      if (s < 60) return `${s}s`;
+      if (s < 3600) return `${Math.floor(s/60)}m`;
+      return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+    }
+
+    function getStatus(s) {
+      s = (s || 'pending').toLowerCase();
+      if (s === 'completed') return 'completed';
+      if (s === 'in_progress' || s === 'in-progress') return 'in_progress';
+      if (s === 'blocked') return 'blocked';
+      return 'pending';
+    }
+
+    function esc(t) {
+      const d = document.createElement('div');
+      d.textContent = t || '';
+      return d.innerHTML;
+    }
+
+    async function fetchState() {
+      try {
+        const r = await fetch('state.json?' + Date.now());
+        if (!r.ok) throw new Error();
+        state = await r.json();
+        updateUI();
+        setConnected(true);
+      } catch (e) {
+        setConnected(false);
+      }
+    }
+
+    async function fetchTasks() {
+      try {
+        const r = await fetch('tasks.json?' + Date.now());
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        tasks = d.tasks || [];
+        for (const t of tasks) {
+          if (t.started_at && t.completed_at) {
+            t.duration_seconds = Math.floor((new Date(t.completed_at) - new Date(t.started_at)) / 1000);
+          }
+        }
+        if (!state) {
+          state = {
+            project: d.project?.name || 'Project',
+            status: 'waiting',
+            progress: { completed: tasks.filter(t => getStatus(t.status) === 'completed').length, total: tasks.length }
+          };
+          updateUI();
+        }
+      } catch (e) {}
+    }
+
+    async function fetchLog() {
+      const f = state?.loop_log || 'loop.log';
+      try {
+        const r = await fetch(f + '?' + Date.now());
+        if (r.ok) {
+          renderLog((await r.text()).split('\n').slice(-150));
+          elements.cliIndicator.classList.remove('inactive');
+          return;
+        }
+      } catch (e) {}
+      elements.cliIndicator.classList.add('inactive');
+    }
+
+    async function fetchTaskLog(taskId) {
+      try {
+        const r = await fetch('runs/');
+        if (r.ok) {
+          const t = await r.text();
+          const m = t.match(new RegExp(`run-[^"]*-${taskId}[^"]*\\.log`, 'g'));
+          if (m?.length) {
+            const lr = await fetch(`runs/${m[m.length-1]}?` + Date.now());
+            if (lr.ok) return await lr.text();
+          }
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    function renderLog(lines) {
+      elements.cliOutput.innerHTML = lines.map(l => {
+        let c = '';
+        if (l.includes('✓') || l.includes('PASS') || l.includes('completed')) c = 'success';
+        else if (l.includes('✗') || l.includes('FAIL') || l.includes('error') || l.includes('Error')) c = 'error';
+        else if (l.includes('═') || l.includes('╔') || l.includes('Iteration')) c = 'header';
+        else if (l.includes('⚠') || l.includes('Retry') || l.includes('attempt')) c = 'warning';
+        else if (l.includes('→') || l.includes('Running') || l.includes('Task:')) c = 'info';
+        return `<div class="cli-line ${c}">${esc(l)}</div>`;
+      }).join('');
+      elements.cliOutput.scrollTop = elements.cliOutput.scrollHeight;
+    }
+
+    function setConnected(c) {
+      elements.connectionDot.classList.toggle('disconnected', !c);
+      if (c) elements.lastUpdate.textContent = new Date().toLocaleTimeString();
+    }
+
+    function createCard(t) {
+      const s = getStatus(t.status);
+      const sel = selectedTaskId === t.id;
+      const attempt = t.attempt && t.attempt > 1 ? `<span class="task-attempt">Attempt ${t.attempt}</span>` : '';
+      const dur = t.duration_seconds ? `<span class="task-duration">${formatDuration(t.duration_seconds)}</span>` : '';
+
+      return `
+        <div class="task-card ${s}${sel ? ' selected' : ''}" data-id="${t.id}" onclick="selectTask('${t.id}')">
+          <div class="task-header">
+            <span class="task-id">${t.id}</span>
+            ${attempt}
+            ${t.phase ? `<span class="task-phase">${t.phase}</span>` : ''}
+          </div>
+          <div class="task-name">${esc(t.name || t.id)}</div>
+          <div class="task-meta">${dur}</div>
+        </div>
+      `;
+    }
+
+    async function selectTask(id) {
+      selectedTaskId = id;
+      document.querySelectorAll('.task-card').forEach(c => c.classList.toggle('selected', c.dataset.id === id));
+
+      const t = tasks.find(x => x.id === id);
+      if (!t) {
+        elements.detailContent.innerHTML = '<div class="detail-empty"><p>Task not found</p></div>';
+        return;
+      }
+
+      const s = getStatus(t.status);
+      const criteria = t.success_criteria || [];
+
+      let html = `
+        <div class="detail-section">
+          <div class="detail-task-name">${esc(t.name)}</div>
+          <div class="detail-badges">
+            <span class="detail-badge">${t.id}</span>
+            ${t.phase ? `<span class="detail-badge phase">${t.phase}</span>` : ''}
+            ${t.duration_seconds ? `<span class="detail-badge duration">${formatDuration(t.duration_seconds)}</span>` : ''}
+            ${t.attempt > 1 ? `<span class="detail-badge attempt">Attempt ${t.attempt}</span>` : ''}
+          </div>
+        </div>
+      `;
+
+      if (t.description) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">Description</div>
+            <div class="detail-description">${esc(t.description)}</div>
+          </div>
+        `;
+      }
+
+      if (criteria.length) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">Success Criteria</div>
+            <div class="criteria-list">
+              ${criteria.map(c => {
+                const icon = s === 'completed' ? 'pass' : 'pending';
+                const txt = c.type === 'file_exists' ? `File: ${c.target}` :
+                           c.type === 'file_contains' ? `Contains: ${c.pattern}` :
+                           c.type === 'command_succeeds' ? `Cmd: ${c.command}` :
+                           c.description || c.type;
+                return `<div class="criteria-item"><span class="criteria-icon ${icon}">${icon==='pass'?'✓':'○'}</span><span>${esc(txt)}</span></div>`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      html += `
+        <div class="detail-section">
+          <div class="detail-section-title">Task Log</div>
+          <div class="task-log-preview" id="taskLogPreview">Loading...</div>
+        </div>
+      `;
+
+      elements.detailContent.innerHTML = html;
+      elements.openLogBtn.style.display = 'inline-block';
+      elements.openLogBtn.onclick = () => window.open('runs/', '_blank');
+
+      const log = await fetchTaskLog(id);
+      const preview = $('taskLogPreview');
+      if (preview) {
+        preview.innerHTML = log ? log.split('\n').slice(-30).map(l => esc(l)).join('\n') : 'No log found';
+      }
+    }
+
+    function updateUI() {
+      if (!state) return;
+
+      elements.projectName.textContent = state.project || 'Task Loop';
+
+      const status = state.status || 'waiting';
+      elements.statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+      elements.statusBadge.className = 'status-badge ' + status;
+
+      const done = state.progress?.completed || 0;
+      const total = state.progress?.total || 0;
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+      elements.completedCount.textContent = done;
+      elements.totalCount.textContent = total;
+      elements.progressPercent.textContent = pct + '%';
+      elements.progressCircle.style.strokeDashoffset = 113.1 - (113.1 * pct / 100);
+
+      elements.iterationCount.textContent = state.iteration || '-';
+      elements.agentName.textContent = state.agent || '-';
+
+      if (state.current_task) {
+        const ct = state.current_task;
+        elements.currentTaskBrief.textContent = `[${ct.id}] ${ct.name}`;
+        elements.progressDot.classList.add('in_progress');
+      } else {
+        elements.currentTaskBrief.textContent = 'None';
+        elements.progressDot.classList.remove('in_progress');
+      }
+
+      // Calculate ETA
+      const durations = tasks.filter(t => t.duration_seconds).map(t => t.duration_seconds);
+      if (durations.length) {
+        const avg = Math.round(durations.reduce((a,b) => a+b, 0) / durations.length);
+        elements.avgDuration.textContent = formatDuration(avg);
+        const remaining = total - done;
+        elements.etaValue.textContent = remaining > 0 ? formatDuration(avg * remaining) : 'Done';
+      }
+
+      if (status === 'running' && !startTime) startTime = Date.now();
+
+      renderKanban();
+    }
+
+    function renderKanban() {
+      const map = {};
+      if (state?.tasks_by_status) {
+        for (const [s, ids] of Object.entries(state.tasks_by_status)) {
+          for (const id of ids) map[id] = { id, status: s, name: id };
+        }
+      }
+      for (const t of tasks) map[t.id] = { ...map[t.id], ...t };
+
+      // Add attempt info from current task
+      if (state?.current_task?.id && state.current_task.attempt) {
+        if (map[state.current_task.id]) {
+          map[state.current_task.id].attempt = state.current_task.attempt;
+        }
+      }
+
+      const pending = [], progress = [], completed = [], blocked = [];
+      for (const t of Object.values(map)) {
+        const s = getStatus(t.status);
+        if (s === 'completed') completed.push(t);
+        else if (s === 'in_progress') progress.push(t);
+        else if (s === 'blocked') blocked.push(t);
+        else pending.push(t);
+      }
+
+      elements.pendingCount.textContent = pending.length;
+      elements.progressColumnCount.textContent = progress.length;
+      elements.completedColumnCount.textContent = completed.length;
+      elements.blockedCount.textContent = blocked.length;
+
+      elements.pendingCards.innerHTML = pending.length ? pending.map(createCard).join('') : '<div class="empty-column">No pending tasks</div>';
+      elements.progressCards.innerHTML = progress.length ? progress.map(createCard).join('') : '<div class="empty-column">Waiting...</div>';
+      elements.completedCards.innerHTML = completed.length ? completed.map(createCard).join('') : '<div class="empty-column">None yet</div>';
+      elements.blockedCards.innerHTML = blocked.length ? blocked.map(createCard).join('') : '<div class="empty-column">None</div>';
+    }
+
+    // Controls
+    elements.pollToggle.addEventListener('click', () => {
+      polling = !polling;
+      elements.pollToggle.textContent = polling ? 'Live' : 'Paused';
+      elements.pollToggle.classList.toggle('active', polling);
+      if (polling) startPolling(); else stopPolling();
+    });
+
+    elements.clearBtn.addEventListener('click', () => {
+      elements.cliOutput.innerHTML = '<div class="cli-line info">Cleared</div>';
+    });
+
+    elements.openLogsBtn.addEventListener('click', () => window.open('runs/', '_blank'));
+
+    function startPolling() {
+      stopPolling();
+      pollInterval = setInterval(() => { if (polling) { fetchState(); fetchTasks(); } }, 2000);
+      logPollInterval = setInterval(() => { if (polling) fetchLog(); }, 800);
+    }
+
+    function stopPolling() {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+      if (logPollInterval) { clearInterval(logPollInterval); logPollInterval = null; }
+    }
+
+    function updateElapsed() {
+      if (startTime && state?.status === 'running') {
+        elements.elapsedTime.textContent = formatTime(Math.floor((Date.now() - startTime) / 1000));
+      }
+    }
+
+    window.selectTask = selectTask;
+
+    // Init
+    fetchTasks();
+    fetchState();
+    fetchLog();
+    startPolling();
+    setInterval(updateElapsed, 1000);
+  </script>
+</body>
+</html>
