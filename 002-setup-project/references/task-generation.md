@@ -286,3 +286,6 @@ Task A depends on B, B depends on A = deadlock.
 
 ### Don't: Assume implicit knowledge
 Each task description should be self-contained. Agent may not have context from previous tasks.
+
+### Don't: Leave subagent_prompt null
+Every task must have a rich `subagent_prompt` generated at setup time. This is the primary brief the executing agent reads. Include the goal, background, explicit requirements (fields, parameters, behaviors), implementation patterns to follow, constraints, and what "done" looks like. The more specific you are, the fewer retries needed. See [task-schema.md](task-schema.md#subagent-prompt--rich-task-prompts) for full guidance.

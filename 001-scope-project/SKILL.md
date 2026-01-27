@@ -108,6 +108,7 @@ Before generating a document, ensure you've captured what's needed for the scope
 | **Who uses it** | Target users/personas |
 | **Key workflows** | How people use it |
 | **Tech approach** | Stack, architecture |
+| **UI/UX requirements** | Visual design, layout, interactions (see UI/UX section below) |
 | **External dependencies** | Backend, APIs, payments (see below) |
 | **Edge cases** | What could go wrong |
 
@@ -120,6 +121,178 @@ Before generating a document, ensure you've captured what's needed for the scope
 | **Integrations** | External systems |
 | **Deployment** | Where/how it runs |
 | **Rollout plan** | How to release safely |
+
+### UI/UX Requirements (medium+ scope, always capture when project has a UI):
+
+**This section is mandatory for any project with a user interface.** UI/UX decisions must always make it into the PRD — they directly shape task generation and implementation quality.
+
+**Step 1: Determine if this is a new or existing project**
+
+```json
+{
+  "questions": [{
+    "question": "Does this project have an existing UI?",
+    "header": "UI Status",
+    "options": [
+      {"label": "New project", "description": "Building UI from scratch"},
+      {"label": "Existing UI", "description": "There's already a frontend to work with"},
+      {"label": "No UI needed", "description": "CLI, API-only, or backend service"}
+    ],
+    "multiSelect": false
+  }]
+}
+```
+
+If **No UI needed**, skip this section entirely.
+
+**Step 2a: New project — Establish UI direction**
+
+```json
+{
+  "questions": [
+    {
+      "question": "What kind of visual style are you going for?",
+      "header": "Style",
+      "options": [
+        {"label": "Clean & minimal", "description": "Lots of whitespace, simple layouts, subtle colors"},
+        {"label": "Bold & modern", "description": "Strong colors, large typography, gradient accents"},
+        {"label": "Data-dense", "description": "Dashboards, tables, compact information display"},
+        {"label": "Match a reference", "description": "I have a site or design I want to look like"}
+      ],
+      "multiSelect": false
+    },
+    {
+      "question": "What's the primary layout pattern?",
+      "header": "Layout",
+      "options": [
+        {"label": "Sidebar + content", "description": "Navigation sidebar with main content area"},
+        {"label": "Top nav + pages", "description": "Header navigation with full-width pages"},
+        {"label": "Single page app", "description": "One scrolling page or modal-driven"},
+        {"label": "Not sure", "description": "Help me decide based on the use case"}
+      ],
+      "multiSelect": false
+    }
+  ]
+}
+```
+
+Follow up with:
+
+```json
+{
+  "questions": [
+    {
+      "question": "What UI component library or approach?",
+      "header": "Components",
+      "options": [
+        {"label": "shadcn/ui (Recommended)", "description": "Radix primitives + Tailwind, copy-paste components"},
+        {"label": "Material UI", "description": "Google's design system for React"},
+        {"label": "Chakra UI", "description": "Composable component library"},
+        {"label": "Custom / Tailwind only", "description": "Build from scratch with utility classes"}
+      ],
+      "multiSelect": false
+    },
+    {
+      "question": "Any specific UX patterns needed?",
+      "header": "UX Patterns",
+      "options": [
+        {"label": "Forms & validation", "description": "Multi-step forms, inline validation, error states"},
+        {"label": "Real-time updates", "description": "Live data, notifications, optimistic UI"},
+        {"label": "Data tables", "description": "Sorting, filtering, pagination, bulk actions"},
+        {"label": "Drag & drop", "description": "Reordering, kanban boards, file uploads"}
+      ],
+      "multiSelect": true
+    }
+  ]
+}
+```
+
+If user selected **"Match a reference"**, ask:
+> "Share the URL or describe the site/design you'd like to reference. I'll note the key visual patterns to match."
+
+**Step 2b: Existing project — Assess current UI and desired changes**
+
+First, examine the existing codebase:
+> "Let me look at your current UI setup."
+
+Check for:
+- Component library in use (package.json)
+- CSS approach (Tailwind, CSS modules, styled-components)
+- Existing layout patterns
+- Design tokens or theme files
+
+Then present findings:
+
+> "Your current UI uses [library] with [CSS approach]. The layout is [pattern]. Here's what I found:"
+> - [Key UI observations]
+
+```json
+{
+  "questions": [{
+    "question": "How should the UI change for this work?",
+    "header": "UI Changes",
+    "options": [
+      {"label": "Keep current style", "description": "Match existing look and feel exactly"},
+      {"label": "Evolve the style", "description": "Improve while staying consistent with existing UI"},
+      {"label": "Redesign needed", "description": "Significant visual changes required"},
+      {"label": "New section only", "description": "New pages/features can have fresh style, leave existing alone"}
+    ],
+    "multiSelect": false
+  }]
+}
+```
+
+If **Evolve** or **Redesign**:
+
+```json
+{
+  "questions": [{
+    "question": "What specifically should change about the UI?",
+    "header": "UI Updates",
+    "options": [
+      {"label": "Colors & theme", "description": "Update color palette, dark/light mode"},
+      {"label": "Layout & navigation", "description": "Restructure navigation, page layouts"},
+      {"label": "Component quality", "description": "Better loading states, animations, responsiveness"},
+      {"label": "Accessibility", "description": "WCAG compliance, keyboard nav, screen readers"}
+    ],
+    "multiSelect": true
+  }]
+}
+```
+
+**Step 3: Responsive & accessibility baseline**
+
+```json
+{
+  "questions": [{
+    "question": "What devices and accessibility level should we target?",
+    "header": "Targets",
+    "options": [
+      {"label": "Desktop only", "description": "Internal tool or desktop-focused app"},
+      {"label": "Desktop + mobile", "description": "Responsive design for all screen sizes"},
+      {"label": "Mobile first", "description": "Primary mobile experience, desktop secondary"},
+      {"label": "WCAG AA compliance", "description": "Full accessibility support required"}
+    ],
+    "multiSelect": true
+  }]
+}
+```
+
+**Step 4: Record in PRD**
+
+All UI/UX decisions must be captured in a dedicated `## UI/UX Requirements` section of the PRD, including:
+- Visual style direction
+- Layout pattern
+- Component library
+- Key UX patterns needed
+- Responsive targets
+- Accessibility requirements
+- For existing projects: what changes vs what stays the same
+- Reference designs or screenshots if provided
+
+This section feeds directly into task generation in 002 — UI tasks without clear UX requirements produce vague, unverifiable work.
+
+---
 
 ### External Dependencies & Integrations (medium+ scope):
 

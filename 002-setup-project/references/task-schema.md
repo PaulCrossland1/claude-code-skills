@@ -39,7 +39,7 @@
   "context_files": ["paths agent should READ"],
   "output_files": ["paths agent will CREATE/MODIFY"],
   "success_criteria": [SuccessCriterion],
-  "subagent_prompt": null,
+  "subagent_prompt": "Rich, detailed prompt for the executing agent (see Subagent Prompt section below)",
   "status": "pending|in_progress|completed|blocked|skipped",
   "started_at": null,
   "completed_at": null,
@@ -212,7 +212,7 @@ Requires human confirmation (use sparingly).
       "description": "TypeScript compiles"
     }
   ],
-  "subagent_prompt": null,
+  "subagent_prompt": "Create the Genome data model representing a kart's AI brain parameters.\n\n## Background\nIn Genetic Kart, each kart is driven by a 'genome' — a set of 11 numerical parameters that control steering, throttle, and braking. The User model (T004) is already complete in shared/types/User.ts — follow the same named export pattern.\n\n## Requirements\nCreate shared/types/Genome.ts with a TypeScript interface containing: id (UUID string), userId (references User.id), name (string, max 50 chars), generation (number, starts at 1), parameters object with 11 fields (steerFromCenter, steerToCheckpoint, throttleBase, throttleStraight, brakeAngle, brakePower, lookahead, driftTendency, recoveryAggression, riskTolerance, topSpeedBias — all numbers with defined ranges), fitness (number, nullable), createdAt, updatedAt.\n\nAdd a Prisma model in prisma/schema.prisma. Store parameters as Json field. Add @relation to User (one-to-many).\n\n## Patterns\n- Read shared/types/User.ts for export pattern\n- Add Genome to shared/types/index.ts barrel export\n- Use @id, @default(uuid()), @relation decorators matching existing models\n\n## Constraints\n- Do NOT add API routes or service logic (separate tasks)\n- Do NOT create migration files (T010 handles that)\n- Parameter ranges are documentation only at type level; validation is in the API layer (T017)",
   "status": "pending",
   "started_at": null,
   "completed_at": null,
@@ -220,6 +220,50 @@ Requires human confirmation (use sparingly).
   "notes": null
 }
 ```
+
+---
+
+## Subagent Prompt — Rich Task Prompts
+
+The `subagent_prompt` field is the most important field for task execution quality. It is the primary instruction the executing agent receives. **Do not leave it null.** Generate it at project setup time (002) so every task is immediately executable with full context.
+
+### What a subagent_prompt must contain
+
+Every `subagent_prompt` should be a multi-paragraph, self-contained brief covering **all** of the following:
+
+1. **Goal** — What this task achieves and why it matters in the project
+2. **Background** — Relevant context the agent needs (what was built before, what depends on this)
+3. **Detailed requirements** — Specific fields, parameters, behaviors, edge cases, validation rules. Pull these directly from the PRD or chat context — don't summarize, be explicit
+4. **Implementation guidance** — Which patterns, libraries, or conventions to follow. Reference specific files to read for existing patterns
+5. **Constraints** — What NOT to do, common pitfalls, things to avoid
+6. **Acceptance definition** — What "done" looks like in concrete terms beyond the automated success_criteria
+
+### Example: Weak vs Strong subagent_prompt
+
+**Weak (don't do this):**
+```
+"subagent_prompt": "Create the Genome TypeScript interface and Prisma schema."
+```
+
+**Strong (do this):**
+```
+"subagent_prompt": "Create the Genome data model that represents a kart's AI brain parameters.\n\n## Background\nIn Genetic Kart, each kart is driven by a 'genome' — a set of 11 numerical parameters that control steering, throttle, and braking behavior. These genomes are mutated between races via genetic algorithms. The User model (T004) is already complete and lives in shared/types/User.ts — follow the same export pattern.\n\n## Requirements\nCreate a TypeScript interface in shared/types/Genome.ts with these exact fields:\n- id: string (UUID)\n- userId: string (references User.id)\n- name: string (user-assigned label, max 50 chars)\n- generation: number (starts at 1, incremented on mutation)\n- parameters: object containing:\n  - steerFromCenter: number (0-1, how aggressively the kart steers away from track center)\n  - steerToCheckpoint: number (0-1, weight of steering toward next checkpoint)\n  - throttleBase: number (0.3-1.0, minimum throttle applied)\n  - throttleStraight: number (0-1, additional throttle on straights)\n  - brakeAngle: number (0-90, angle threshold to trigger braking)\n  - brakePower: number (0-1, how hard to brake)\n  - lookahead: number (1-5, how many checkpoints ahead to consider)\n  - driftTendency: number (0-1, willingness to drift)\n  - recoveryAggression: number (0-1, how aggressively to correct off-track)\n  - riskTolerance: number (0-1, willingness to take tight lines)\n  - topSpeedBias: number (0-1, preference for top speed vs acceleration)\n- fitness: number (calculated after race, nullable)\n- createdAt: Date\n- updatedAt: Date\n\nAlso add a Prisma model in prisma/schema.prisma. The parameters object should be stored as a Json field in Prisma. Add a relation to User (one User has many Genomes).\n\n## Patterns to follow\n- Read shared/types/User.ts for the export pattern (named export, not default)\n- Read shared/types/index.ts and add Genome to the barrel export\n- Prisma schema should use @id, @default(uuid()), @relation decorators matching existing models\n\n## Constraints\n- Do NOT add API routes or service logic — those are separate tasks\n- Do NOT create migration files — T010 handles migrations\n- Parameter ranges are documentation only at the type level; validation happens in the API layer (T017)"
+```
+
+### Prompt length guidance
+
+| Complexity | Prompt length |
+|------------|---------------|
+| trivial | 100-200 words |
+| simple | 200-400 words |
+| moderate | 400-700 words |
+| complex | 700-1200 words |
+
+### Referencing requirements
+
+- **From PRD file**: Quote or paraphrase specific PRD sections. Include field names, validation rules, and behaviors verbatim.
+- **From chat context**: Reconstruct the specific details discussed. Reference CONTEXT.md sections.
+- **Always**: Name the exact files to read for patterns, the exact files to create/modify, and the exact fields/parameters/behaviors expected.
 
 ---
 

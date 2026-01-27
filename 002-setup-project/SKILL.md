@@ -120,6 +120,7 @@ Create `.claude/tasks.json` following [task-generation.md](references/task-gener
 2. **Extract components** per phase
 3. **Order by dependency** (foundation → data → core → api → ui → test)
 4. **Write success criteria** (every task must be verifiable)
+5. **Write rich subagent_prompt for every task** (see below)
 
 **Scale to scope:**
 | Project Size | Typical Tasks |
@@ -193,6 +194,9 @@ Each task completable in single agent session (~15-30 min).
 
 **Too big**: "Build authentication system"
 **Right size**: "Create User model and Prisma schema"
+
+### Rich Subagent Prompts
+Every task must have a detailed `subagent_prompt` — never leave it null. This is the primary instruction the executing agent receives. Each prompt must include: the goal and why it matters, background context (what exists, what depends on this), explicit requirements (fields, parameters, behaviors — not summaries), implementation guidance (patterns to follow, files to read), constraints (what NOT to do), and what "done" looks like. See [task-schema.md](references/task-schema.md#subagent-prompt--rich-task-prompts) for full guidance and examples.
 
 ### Verifiability
 Every task has automated success criteria:

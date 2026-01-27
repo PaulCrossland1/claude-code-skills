@@ -604,6 +604,7 @@ task = json.loads(sys.argv[1])
 prompt_file, ctx_file, arch_file, root = Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), Path(sys.argv[5])
 
 tid, tname, tdesc = task.get("id", ""), task.get("name", ""), task.get("description", "")
+subagent_prompt = task.get("subagent_prompt") or ""
 ctx_files, out_files = task.get("context_files", []), task.get("output_files", [])
 criteria = task.get("success_criteria", [])
 best_practices = task.get("best_practices", [])
@@ -621,9 +622,16 @@ for c in criteria:
 
 bp_text = "\n".join(f"- {bp}" for bp in best_practices) if best_practices else ""
 
+# Use rich subagent_prompt as primary brief, fall back to description
+task_brief = subagent_prompt if subagent_prompt else tdesc
+
 prompt = f"""# Task: {tid} - {tname}
 
 You are an autonomous coding agent. Complete this task fully and correctly.
+
+## Task Brief
+
+{task_brief}
 
 ## Task Details
 
@@ -742,12 +750,16 @@ attempt_num = sys.argv[7] if len(sys.argv) > 7 else "1"
 failed_criteria = sys.argv[8] if len(sys.argv) > 8 else ""
 
 tid, tname, tdesc = task.get("id", ""), task.get("name", ""), task.get("description", "")
+subagent_prompt = task.get("subagent_prompt") or ""
 ctx_files, out_files = task.get("context_files", []), task.get("output_files", [])
 criteria = task.get("success_criteria", [])
 best_practices = task.get("best_practices", [])
 
 ctx_content = ctx_file.read_text()[:2500] if ctx_file.exists() else ""
 arch_content = arch_file.read_text()[:3000] if arch_file.exists() else ""
+
+# Use rich subagent_prompt as primary brief, fall back to description
+task_brief = subagent_prompt if subagent_prompt else tdesc
 
 # Read previous log (last 100 lines)
 prev_log_content = ""
@@ -796,6 +808,10 @@ prompt = f"""# Task: {tid} - {tname}
 
 You are an autonomous coding agent. Complete this task fully and correctly.
 {failure_section}
+## Task Brief
+
+{task_brief}
+
 ## Task Details
 
 **ID**: {tid}
