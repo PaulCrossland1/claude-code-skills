@@ -436,7 +436,7 @@ Copy skills from source to `~/.claude/skills/`:
 
 ```bash
 # From the skills repository
-SKILLS_SOURCE="/Users/paulcrossland/Documents/claude-skills"
+SKILLS_SOURCE="$HOME/Documents/claude-skills"
 
 # Install each skill
 for skill in 001-scope-project 002-setup-project 003-execute-tasks; do
